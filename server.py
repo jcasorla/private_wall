@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, redirect,session, flash
 from mysqlconnection import connectToMySQL
 import re	# the regex module
-from flask_bcrypt import Bcrypt        
+from flask_bcrypt import Bcrypt
+from datetime import datetime      
 
 
 
@@ -21,8 +22,8 @@ def index():
 
 @app.route('/users', methods=['POST'])
 def create_user():
-    print("Got Post Info")
-    print(request.form)
+    # print("Got Post Info")
+    # print(request.form)
     
     failed=False
     
@@ -78,7 +79,7 @@ def create_user():
         }
         mysql = connectToMySQL(myDB)
         id=mysql.query_db(query,data)
-        print(id)
+        # print(id)
 
         query2="select * from users where id=%(id)s"
         data2 = {
@@ -102,17 +103,29 @@ def showUser():
 
     mysql = connectToMySQL(myDB)
     users=mysql.query_db(query,data)
+    print(session["id"])
     #select m.text,m.id,m.users_id, m.recipient_id,u.first_name, u.last_name from messages m join users u on u.id=m.recipient_id where m.users_id=
-    query="select m.text,m.id,m.users_id, m.recipient_id,u.first_name, u.last_name from messages m join users u on u.id=m.recipient_id where m.recipient_id=%(id)s"
+    #select m.text, m.created_at,m.id,m.users_id, m.recipient_id,u.first_name, u.last_name from messages m join users u on u.id=m.recipient_id where m.recipient_id=
+    #select m.text, m.created_at,m.id,m.users_id, m.recipient_id,u2.first_name, u2.last_name from messages m join users u on u.id=m.recipient_id join users u2 on u2.id=users_id where m.recipient_id
+    #select m.text, m.created_at,m.id,m.users_id, m.recipient_id,u2.first_name, u2.last_name, TIMEDIFF(now(),m.created_at) as how_long from messages m join users u on u.id=m.recipient_id join users u2 on u2.id=users_id where m.recipient_id
+
+
+
+
+    query="select m.text, m.created_at,m.id,m.users_id, m.recipient_id,u2.first_name, u2.last_name, TIMEDIFF(now(),m.created_at) as how_long from messages m join users u on u.id=m.recipient_id join users u2 on u2.id=users_id where m.recipient_id=%(id)s"
     data = {
-        "id": session['id']            
+        "id": session['id']
     }
+
+    
 
     mysql = connectToMySQL(myDB)
     messages=mysql.query_db(query,data)
+    # print(messages)
     
     if(bool(session)):
-        return render_template("show.html", all_users=users,messages=messages)
+        messages2=calcTimeDiff(messages)
+        return render_template("show.html", all_users=users,messages=messages2)
     else:
         return redirect("/")
 
@@ -142,7 +155,7 @@ def login():
         failed=True
 
     elif not '_flashes' in session.keys():
-        print(request.form["email"])
+        # print(request.form["email"])
         mysql = connectToMySQL(myDB)
         query = "SELECT * FROM users WHERE email like %(em)s;"
         data = { "em" : request.form["email"] }
@@ -155,7 +168,7 @@ def login():
                 # never render on a post, always redirect!
             else:
                 flash("Unable to Login")
-                print("Unable to login")
+                # print("Unable to login")
                 failed=True
    
 
@@ -189,7 +202,7 @@ def sendMessage():
 
 def delete_message(id):
     id=id
-    print(id)
+    # print(id)
 
     query="delete from messages where id=%(id)s"
     data = {
@@ -209,5 +222,47 @@ def logout():
     session.clear()
     return redirect("/")
 
+def calcTimeDiff(messages):
+    # print (messages[0]["how_long"])
+    # days=messages[0]["how_long"].days
+    # hours, remainder = divmod(messages[0]["how_long"].seconds, 3600)
+    # minutes, seconds = divmod(remainder, 60)
+
+
+    # print (days)
+    # print(hours)
+    # print(minutes)
+    # print(seconds)
+
+    for x in range(len(messages)):
+        # print ("in loop")
+        # print (messages[x]["how_long"])
+        days=messages[x]["how_long"].days
+        hours, remainder = divmod(messages[x]["how_long"].seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        if(days>365):
+            years=days/365
+            messages[x].update({'duration': f"{years} years ago"})
+        elif(days>30):
+            months=days/30
+            messages[x].update({'duration': f"{months} months ago"})
+        elif(days>7):
+            weeks=days/7
+            messages[x].update({'duration': f"{weeks} weeks ago"})
+        elif(days>0):
+            messages[x].update({'duration': f"{days} days ago"})
+        elif(hours>0):
+            messages[x].update({'duration': f"{hours} hours ago"})
+        elif(minutes>0):
+            messages[x].update({'duration': f"{minutes} minutes ago"})
+    
+    # print(messages)
+
+    return messages
+
+
+    
+
 if __name__ == "__main__":
-    app.run(debug=True)  
+    app.run(debug=True) 
